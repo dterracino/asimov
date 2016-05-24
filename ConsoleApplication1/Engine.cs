@@ -7,13 +7,29 @@ using System.Threading.Tasks;
 
 namespace ConsoleApplication1
 {
-    class Engine
+    public class Engine
     {
-        Func<string> readline = null;
+        static Engine instance = new Engine();
 
-        public Engine(Func<string> readline)
+        public static Engine Instance
         {
-            this.readline = readline;
+            get
+            {
+                return instance;
+            }
+        }
+
+        Func<string> readline = null;
+        Action<string> send = null;
+        private object sync = new object();
+
+        public void Configure(Func<string> readline, Action<string> send)
+        {
+            lock (sync)
+            {
+                this.readline = readline;
+                this.send = send;
+            }
         }
 
         List<Trigger> TriggerBag = new List<Trigger>();
@@ -27,17 +43,12 @@ namespace ConsoleApplication1
                 Trigger triggered = MatchWith(line);
                 if (triggered != null)
                 {
-                    triggered.Source.SetResult(new Context(line) { Condition = triggered.GroupIndex });
+                    triggered.Source.SetResult(new Context { Condition = triggered.GroupIndex });
                 }
             }
         }
 
-        public async Task<Context> CreateTrigger(string v)
-        {
-            return await CreateTriggerN(v);
-        }
-
-        public async Task<Context> CreateTriggerN(params string[] vs)
+        public async Task<Context> Pattern(params string[] vs)
         {
             Guid groupId = Guid.NewGuid();
             List<Trigger> triggers = new List<Trigger>();
@@ -59,9 +70,15 @@ namespace ConsoleApplication1
             {
                 TriggerBag.Remove(trig);
                 trig.Source.TrySetCanceled();
+                TriggerGroup.Remove(groupId);
             }
 
             return x;
+        }
+
+        public void Send(string line)
+        {
+            send(line);
         }
 
         private Trigger MatchWith(string line)
@@ -69,15 +86,28 @@ namespace ConsoleApplication1
             foreach (var item in TriggerBag)
             {
                 var res = item.Pattern.Match(line);
-                if (res.Success)
-                {
-                    TriggerBag.Remove(item);
-
-                    return item;
-                }
+                if (res.Success) return item;
             }
 
             return null;
+        }
+    }
+
+    public static class EngineExtentions
+    {
+        public static Task<Context> Wait(this string s)
+        {
+            return Engine.Instance.Pattern(s);
+        }
+
+        public static Task<Context> Wait(this IEnumerable<string> vs)
+        {
+            return Engine.Instance.Pattern(vs.ToArray());
+        }
+
+        public static void Send(this string line)
+        {
+            Engine.Instance.Send(line);
         }
     }
 }

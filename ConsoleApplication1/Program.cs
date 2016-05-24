@@ -13,28 +13,30 @@ namespace ConsoleApplication1
     /// </summary>
     /// <remarks>
     /// <![CDATA[
-    /// >> Bill comes into the room
-    /// << draw sword
-    /// >> you are hit                      [Interleaved with other triggers]
-    /// << run Forest run!
-    /// << State: Hit: True, Thirsty: False
-    /// >> You drew your sword from the sheath
-    /// << kill bill
-    /// >> Bill dodged
-    /// << Try again
-    /// << kill bill
-    /// >> you are thirsty                  [Interleaved with other triggers]
-    /// << drink water baby
-    /// << State: Hit: True, Thirsty: True
-    /// >> Bill dodged
-    /// << Try again
-    /// << kill bill
-    /// >> Bill comes into the room         [Matched triggers are removed and won't match again]
-    /// >> Bill is killed
-    /// << Good! Bill is killed!
-    /// << unwield sword
-    /// << rest
-    /// >>
+    /// [IN]:  Bill comes into the room
+    /// [OUT]: draw sword
+    /// [IN]:  You drew your sword from the sheath
+    /// [OUT]: kill bill
+    /// [IN]:  Bill dodged
+    /// [OUT]: Try again
+    /// [OUT]: kill bill
+    /// [IN]:  Bill comes into the room
+    /// [IN]:  you are hit
+    /// [OUT]: run Forest run!
+    /// [OUT]: State: Hit: True, Thirsty: False
+    /// [IN]:  you are thirsty
+    /// [OUT]: drink water baby
+    /// [OUT]: State: Hit: True, Thirsty: True
+    /// [IN]:  Bill dodged
+    /// [OUT]: Try again
+    /// [OUT]: kill bill
+    /// [IN]:  Bill dodged
+    /// [OUT]: Try again
+    /// [OUT]: kill bill
+    /// [IN]:  Bill is killed
+    /// [OUT]: Good! Bill is killed!
+    /// [OUT]: unwield sword
+    /// [OUT]: rest
     /// ]]>
     /// </remarks>
 
@@ -42,78 +44,68 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
-            var engine = new Engine(ReadLine);
+            Engine.Instance.Configure(
+                ReadLine,
+                x => Console.WriteLine($"[OUT]: {x}"));
 
-            var p = new Player(engine.CreateTrigger, engine.CreateTriggerN);
+            var p = new Player();
             p.MonitorHit(); // the created task is hot
             p.MonitorThirsty(); // the created task is hot
             p.KillBill();
 
-            engine.Run();
+            Engine.Instance.Run();
         }
 
         private static string ReadLine()
         {
-            Console.Write(">> ");
+            Console.Write("[IN]:  ");
             return Console.ReadLine();
         }
     }
 
     class Player
     {
-        Func<string, Task<Context>> createTrigger;
-        Func<string[], Task<Context>> createTriggerN;
         public bool IsThirsty;
         public bool IsHit;
 
-        public Player(
-            Func<string, Task<Context>> createTrigger,
-            Func<string[], Task<Context>> createTriggerN)
-        {
-            this.createTrigger = createTrigger;
-            this.createTriggerN = createTriggerN;
-        }
-
         /// <summary>
-        /// Demo fork
+        /// Demo forked conditions
         /// </summary>
         public async void KillBill()
         {
-            var ctx = await createTrigger("^Bill comes into the room");
-            ctx.Send("draw sword");
+            await "^Bill comes into the room".Wait();
+            "draw sword".Send();
 
-            ctx = await createTrigger("^You drew your sword from the sheath");
+            await "^You drew your sword from the sheath".Wait();
 
             bool killed = false;
             while (!killed)
             {
-                ctx.Send("kill bill");
+                "kill bill".Send();
 
-                ctx = await createTriggerN(new[] { "^Bill is killed", "^Bill dodged" });
-
-                if (ctx.Condition == 0)
+                if ((await new[] { "^Bill is killed", "^Bill dodged" }.Wait()).Condition == 0)
                 {
-                    ctx.Send("Good! Bill is killed!");
-                    ctx.Send("unwield sword");
+                    "Good! Bill is killed!".Send();
+                    "unwield sword".Send();
                     killed = true;
                 }
                 else
                 {
-                    ctx.Send("Try again");
+                    "Try again".Send();
                 }
             }
 
-            ctx.Send("rest");
+            "rest".Send();
         }
 
         public async void MonitorHit()
         {
             while (true)
             {
-                var ctx = await createTrigger("^you are hit");
+                await "^you are hit".Wait();
                 IsHit = true;
-                ctx.Send("run Forest run!");
-                ctx.Send($"State: {this}");
+                "run Forest run!".Send();
+                $"State: {this}".Send();
             }
         }
 
@@ -121,10 +113,10 @@ namespace ConsoleApplication1
         {
             while (true)
             {
-                var ctx = await createTrigger("^you are thirsty");
+                await "^you are thirsty".Wait();
                 IsThirsty = true;
-                ctx.Send("drink water baby");
-                ctx.Send($"State: {this}");
+                "drink water baby".Send();
+                $"State: {this}".Send();
             }
         }
 
