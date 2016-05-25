@@ -13,7 +13,7 @@ namespace Multiplexer
     class Program
     {
         static BlockingCollection<byte[]> UploadQueue = new BlockingCollection<byte[]>();
-        static ConcurrentDictionary<TcpClient, BlockingCollection<byte[]>> DownloadQueues = new ConcurrentDictionary<TcpClient, BlockingCollection<byte[]>>();
+        static ConcurrentDictionary<Client, byte> clients = new ConcurrentDictionary<Client, byte>();
 
         static void Main(string[] args)
         {
@@ -22,46 +22,25 @@ namespace Multiplexer
                 StartServer(host, port);
             }));
 
-            IPAddress localIp = IPAddress.Parse("127.0.0.1");
-            int localPort = 3333;
-
-            var localserver = new TcpListener(localIp, localPort);
+            var localserver = new TcpListener(IPAddress.Parse("127.0.0.1"), 3333);
             localserver.Start();
+
             while (true)
             {
                 Console.WriteLine("Waiting for clients to connect...");
                 var client = localserver.AcceptTcpClient();
-                Console.WriteLine("Client connected: " + client.ToString());
 
-                var clientQueue = new BlockingCollection<byte[]>();
-                DownloadQueues[client] = clientQueue;
-                var stream = client.GetStream();
-
-                // FIXME: how to properly handle client disposal?
-                // local client uplink task. Read data from client and put into queue
-                Task.Run(() =>
+                var clientWrapper = new Client(client, data => UploadQueue.TryAdd(data));
+                Console.WriteLine($"Client connected: {clientWrapper}");
+                clients[clientWrapper] = 0;
+                clientWrapper.OnClose = () =>
                 {
-                    int c;
-                    byte[] buffer = new byte[256];
-                    while ((c = stream.Read(buffer, 0, buffer.Length)) > 0)
-                    {
-                        UploadQueue.Add(buffer.Take(c).ToArray());
-                    }
+                    Console.WriteLine($"Removing client from clients list: {clientWrapper}");
+                    byte c;
+                    clients.TryRemove(clientWrapper, out c);
+                };
 
-                    BlockingCollection<byte[]> q;
-                    bool removed = DownloadQueues.TryRemove(client, out q);
-                    Console.WriteLine($"Local connection is closed: {client}. Client's download queue removed: {removed}.");
-                });
-
-                // local client downlink task. Get data from queue and write to client
-                Task.Run(() =>
-                {
-                    byte[] data;
-                    while (null != (data = clientQueue.Take()))
-                    {
-                        stream.Write(data, 0, data.Length);
-                    }
-                });
+                var tsk = clientWrapper.Start();
             }
         }
 
@@ -94,38 +73,19 @@ namespace Multiplexer
             }
         }
 
-        static Tuple<Task, Task> StartServer(string hostname, int port)
+        static Task StartServer(string hostname, int port)
         {
+            Console.WriteLine($"Connecting to {hostname}:{port}");
             var remote = new TcpClient(hostname, port);
-            var remoteStream = remote.GetStream();
-
-            // remote download task
-            var download = Task.Run(() =>
+            var server = new Remote(remote, UploadQueue, data =>
             {
-                int c;
-                byte[] buffer = new byte[256];
-                while ((c = remoteStream.Read(buffer, 0, buffer.Length)) > 0)
+                foreach (var client in clients)
                 {
-                    foreach (var q in DownloadQueues)
-                    {
-                        q.Value.Add(buffer.Take(c).ToArray());
-                    }
-                }
-
-                Console.WriteLine("Remote connection is closed");
-            });
-
-            // remote upload task
-            var upload = Task.Run(() =>
-            {
-                byte[] data;
-                while (null != (data = UploadQueue.Take()))
-                {
-                    remoteStream.Write(data, 0, data.Length);
+                    client.Key.DownlinkQueue.TryAdd(data);
                 }
             });
 
-            return Tuple.Create(download, upload);
+            return server.Start();
         }
     }
 }
