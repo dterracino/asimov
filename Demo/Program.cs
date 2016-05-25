@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Asimov;
 
-namespace ConsoleApplication1
+namespace Asimov
 {
     /// <summary>
     /// 
@@ -44,9 +45,9 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
-            Engine.Instance.Configure(
-                ReadLine,
-                x => Console.WriteLine($"[OUT]: {x}"));
+            Engine.Instance
+                .Configure(config => config.ReadLine = ReadLine)
+                .Configure(config => config.Send = config.Send = x => Console.WriteLine($"[OUT]: {x}"));
 
             var p = new Player();
             p.MonitorHit(); // the created task is hot

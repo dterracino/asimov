@@ -1,9 +1,9 @@
 ﻿using System;
 
-namespace ConsoleApplication1
+namespace Asimov
 {
     public class Context
     {
-        internal int Condition;
+        public int Condition;
     }
 }

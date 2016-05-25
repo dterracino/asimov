@@ -5,10 +5,16 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace ConsoleApplication1
+namespace Asimov
 {
     public class Engine
     {
+        public class Configuration
+        {
+            public Func<string> ReadLine;
+            public Action<string> Send;
+        }
+
         static Engine instance = new Engine();
 
         public static Engine Instance
@@ -19,16 +25,15 @@ namespace ConsoleApplication1
             }
         }
 
-        Func<string> readline = null;
-        Action<string> send = null;
         private object sync = new object();
+        private Configuration config = new Configuration();
 
-        public void Configure(Func<string> readline, Action<string> send)
+        public Engine Configure(Action<Configuration> configure)
         {
             lock (sync)
             {
-                this.readline = readline;
-                this.send = send;
+                configure(this.config);
+                return this;
             }
         }
 
@@ -38,7 +43,7 @@ namespace ConsoleApplication1
         public void Run()
         {
             string line;
-            while (null != (line = readline()))
+            while (null != (line = config.ReadLine()))
             {
                 Trigger triggered = MatchWith(line);
                 if (triggered != null)
@@ -78,7 +83,7 @@ namespace ConsoleApplication1
 
         public void Send(string line)
         {
-            send(line);
+            config.Send(line);
         }
 
         private Trigger MatchWith(string line)
