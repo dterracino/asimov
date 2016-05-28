@@ -50,7 +50,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ConsoleApplication1\Asimov.csproj">
+    <ProjectReference Include="..\asimov\Asimov.csproj">
       <Project>{2b5565b9-6f5a-49f8-93a3-bf86f1a928a1}</Project>
       <Name>Asimov</Name>
     </ProjectReference>
