@@ -9,7 +9,8 @@ namespace Asimov
     {
         public TaskCompletionSource<Context> Source;
         public Regex Pattern;
+        public Guid ConditionId;
+        public int ConditionIndex;
         public Guid GroupId;
-        public int GroupIndex;
     }
 }

@@ -48,34 +48,39 @@ namespace Asimov
                 Trigger triggered = MatchWith(line);
                 if (triggered != null)
                 {
-                    triggered.Source.SetResult(new Context { Condition = triggered.GroupIndex });
+                    triggered.Source.SetResult(new Context { Condition = triggered.ConditionIndex });
                 }
             }
         }
 
-        public async Task<Context> Pattern(params string[] vs)
+        public Task<Context> Pattern(params string[] vs)
         {
-            Guid groupId = Guid.NewGuid();
+            return Pattern(Guid.NewGuid(), vs);
+        }
+
+        public async Task<Context> Pattern(Guid groupId, params string[] vs)
+        {
+            Guid condId = Guid.NewGuid();
             List<Trigger> triggers = new List<Trigger>();
             List<Task<Context>> tasks = new List<Task<Context>>();
             for (int i = 0; i < vs.Length; i++)
             {
                 string v = vs[i];
                 var src = new TaskCompletionSource<Context>();
-                triggers.Add(new Trigger { Source = src, Pattern = new Regex(v), GroupId = groupId, GroupIndex = i });
+                triggers.Add(new Trigger { Source = src, Pattern = new Regex(v), ConditionId = condId, ConditionIndex = i, GroupId = groupId });
                 tasks.Add(src.Task);
             }
 
             TriggerBag.AddRange(triggers);
-            TriggerGroup[groupId] = triggers;
+            TriggerGroup[condId] = triggers;
 
             var x = await await Task.WhenAny(tasks);
 
-            foreach (var trig in TriggerGroup[groupId])
+            foreach (var trig in TriggerGroup[condId])
             {
                 TriggerBag.Remove(trig);
                 trig.Source.TrySetCanceled();
-                TriggerGroup.Remove(groupId);
+                TriggerGroup.Remove(condId);
             }
 
             return x;
